@@ -97,6 +97,23 @@ Evaluation reports known-species macro average precision, Unknown average precis
 
 The current test results were inspected during development and should be described as exploratory, not as a previously unseen blind test. Existing reported results use one seed; validation and test unknown-species support is limited and uneven. Do not use the test set to choose models, epochs, thresholds, or hyperparameters. A fresh held-out dataset would be needed for a genuinely independent final evaluation after development.
 
+## M4: CNN-LSTM with earlier-clip context
+
+M4 predicts the species in a clip from that clip **and the three clips before it in the same recording** (`m4_model.py`: a shared four-block clip CNN, a 256-unit LSTM that skips padded steps, and known and Unknown heads on the last state; 1.61 M parameters). A control with the three earlier clips masked uses the identical pipeline (`--no-context`). M4 uses the same prepared dataset as M1 and M2: it trains on the M2 training manifest (all kept training clips), selects the checkpoint and thresholds on the shared validation manifest, uses the shared training-only M1 normalization, the same loss, optimizer, schedule, augmentation recipe and early stopping, and is evaluated by the same `evaluate.evaluate_predictions` on the same test clips.
+
+The earlier clips of a target are found in the same manifest by `recording_id` and clip index (`clip_index`/`clip_idx` if present, otherwise the integer after the last underscore of `clip_id`). A slot with no such clip (start of a recording, or an excluded clip) is zero-padded and masked. Augmentation is drawn once per sequence and applied to all real clips.
+
+```bash
+python train_m4.py --dataset-dir /path/to/prepared-uhh --output /path/to/output/M4 --device mps \
+  --path-map /original/project-root /local/project-root
+python train_m4.py --dataset-dir /path/to/prepared-uhh --output /path/to/output/M4_noctx --no-context --device mps \
+  --path-map /original/project-root /local/project-root
+python evaluate_m4.py --dataset-dir /path/to/prepared-uhh --checkpoint /path/to/output/M4/best.pt \
+  --output /path/to/output/M4/test_metrics.json --device mps --path-map /original/project-root /local/project-root
+```
+
+`evaluate_m4.py` also records how many test sequences have all four clips real versus at least one padded slot.
+
 ## Acknowledgments
 
 The project's preprocessing builds on the team's [CS230 bird soundscape repository](https://github.com/wyy1048576/cs230-birdset). The project code organization was informed by the [CS230 code examples](https://github.com/cs230-stanford/cs230-code-examples); the original CS230 examples' MIT notice is retained in `third_party/CS230_LICENSE.txt`. Neither the source dataset nor third-party preprocessing data is included in this repository.
